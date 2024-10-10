@@ -184,9 +184,6 @@ square_size = 1
 # display
 # True -> fix board, moving cameras
 # False -> fix camera, moving boards
-# min_values, max_values = show.draw_camera_boards(ax, camera_matrix, cam_width, cam_height,
-#                                                 scale_focal, extrinsics, board_width,
-#                                                 board_height, square_size, True)
 
 min_values, max_values = show.draw_camera_boards(ax, camera_matrix, cam_width, cam_height,
                                                 scale_focal, extrinsics, board_width,
