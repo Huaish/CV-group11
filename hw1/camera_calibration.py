@@ -3,6 +3,7 @@ import cv2
 import glob
 import matplotlib.pyplot as plt
 import camera_calibration_show_extrinsics as show
+from scipy.spatial.transform import Rotation as R
 from PIL import Image
 # prepare object points, like (0,0,0), (1,0,0), (2,0,0) ....,(6,5,0)
 # (8,6) is for the given testing images.
@@ -52,28 +53,127 @@ for idx, fname in enumerate(images):
 #######################################################################################################
 print('Camera calibration...')
 img_size = img[0].shape
+rvecs = []
+tvecs = []
 # You need to comment these functions and write your calibration function from scratch.
 # Notice that rvecs is rotation vector, not the rotation matrix, and tvecs is translation vector.
 # In practice, you'll derive extrinsics matrixes directly. The shape must be [pts_num,3,4], and use them to plot.
-ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, img_size,None,None)
+# ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, img_size, None, None)
+# Vr = np.array(rvecs)
+# Tr = np.array(tvecs)
+# extrinsics = np.concatenate((Vr, Tr), axis=1).reshape(-1,6)
+"""
+Write your code here
+"""
+
+def compute_homography(objpoints, imgpoints):
+    # 計算單應性矩陣
+    H_init, _ = cv2.findHomography(objpoints, imgpoints)
+    # objpoints 是 3D 空間中的點，imgpoints 是影像中的 2D 點
+    A = []
+
+    # 將物體點和影像點轉換為 2D
+    for i in range(len(objpoints)):
+        X, Y = objpoints[i][0], objpoints[i][1]
+        u, v = imgpoints[i][0][0], imgpoints[i][0][1]
+        
+        # 兩個對應點生成兩個方程
+        A.append([-X, -Y, -1, 0, 0, 0, u*X, u*Y, u])
+        A.append([0, 0, 0, -X, -Y, -1, v*X, v*Y, v])
+    
+    # 將 A 轉換為矩陣
+    A = np.array(A)
+    
+    # 使用 SVD 來求解 A * h = 0
+    U, S, Vh = np.linalg.svd(A)
+    
+    # Vh 的最後一行是對應最小奇異值的解，即我們要求的 h
+    H = Vh[-1].reshape(3, 3)
+    
+    # 將 H 標準化，使 H[2,2] = 1
+    H = H / H[-1, -1]
+    return H
+
+def vij(H, i, j):
+    # 計算 Vij，用於內參數計算
+    return np.array([
+        H[0, i] * H[0, j],
+        H[0, i] * H[1, j] + H[1, i] * H[0, j],
+        H[1, i] * H[1, j],
+        H[2, i] * H[0, j] + H[0, i] * H[2, j],
+        H[2, i] * H[1, j] + H[1, i] * H[2, j],
+        H[2, i] * H[2, j]
+    ])
+
+# 計算內參數矩陣 K
+def compute_intrinsics(H_list):
+    # 使用 Hi 計算矩陣 B，並使用 Cholesky 分解求解內參數矩陣 K
+    V = []
+    for H in H_list:
+        V.append(vij(H, 0, 1))
+        V.append(vij(H, 0, 0) - vij(H, 1, 1))
+    
+    V = np.array(V)
+    _, _, Vh = np.linalg.svd(V)
+    b = Vh[-1]
+    B11, B12, B22, B13, B23, B33 = b
+    
+    B = np.array([[b[0], b[1], b[3]],
+                  [b[1], b[2], b[4]],
+                  [b[3], b[4], b[5]]])
+
+    cy = (B12 * B13 - B11 * B23) / (B11 * B22 - B12**2)
+    lamda = B33 - (B13**2 + cy*(B12*B13 - B11*B23)) / B11
+    fx = np.sqrt(lamda / B11)
+    fy = np.sqrt(lamda * B11 / (B11 * B22 - B12**2))
+    gamma = -B12 * fx**2 * fy / lamda
+    cx = (gamma * cy / fy) - (B13 * fx**2 / lamda)
+    
+    # 組合內參數矩陣 K
+    K = np.array([[fx, gamma, cx],
+                  [0,  fy,    cy],
+                  [0,  0,     1]])
+    return K
+
+
+def compute_extrinsics(K, H):
+    h1 = H[:, 0]
+    h2 = H[:, 1]
+    h3 = H[:, 2]
+
+    lambda_ = 1/np.linalg.norm(np.dot(np.linalg.inv(K), h1))
+
+    r1 = lambda_*np.dot(np.linalg.inv(K), h1)
+    r2 = lambda_*np.dot(np.linalg.inv(K), h2)
+    r3 = np.cross(r1, r2)
+    r_matrix = np.array([r1, r2, r3]).T
+
+    t = lambda_*np.dot(np.linalg.inv(K), h3)
+    r = R.from_matrix(r_matrix).as_rotvec()
+
+    rvecs.append(r)
+    tvecs.append(t)
+
+# 主函數部分：逐步調用上述函數來完成相機校正
+H_matrices = [compute_homography(objp, imgp) for objp, imgp in zip(objpoints, imgpoints)]
+K = compute_intrinsics(H_matrices)
+
+for H in H_matrices:
+    compute_extrinsics(K, H)
+
 Vr = np.array(rvecs)
 Tr = np.array(tvecs)
 extrinsics = np.concatenate((Vr, Tr), axis=1).reshape(-1,6)
-"""
-Write your code here
 
-
-
-
-"""
 # show the camera extrinsics
 print('Show the camera extrinsics')
 # plot setting
 # You can modify it for better visualization
 fig = plt.figure(figsize=(10, 10))
-ax = fig.gca(projection='3d')
+ax = fig.add_subplot(projection = '3d')
+# ax = fig.gca(projection='3d')
 # camera setting
-camera_matrix = mtx
+camera_matrix = K
 cam_width = 0.064/0.1
 cam_height = 0.032/0.1
 scale_focal = 1600
@@ -84,6 +184,10 @@ square_size = 1
 # display
 # True -> fix board, moving cameras
 # False -> fix camera, moving boards
+# min_values, max_values = show.draw_camera_boards(ax, camera_matrix, cam_width, cam_height,
+#                                                 scale_focal, extrinsics, board_width,
+#                                                 board_height, square_size, True)
+
 min_values, max_values = show.draw_camera_boards(ax, camera_matrix, cam_width, cam_height,
                                                 scale_focal, extrinsics, board_width,
                                                 board_height, square_size, True)
