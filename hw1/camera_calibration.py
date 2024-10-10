@@ -9,7 +9,7 @@ from PIL import Image
 # (8,6) is for the given testing images.
 # If you use the another data (e.g. pictures you take by your smartphone), 
 # you need to set the corresponding numbers.
-corner_x = 7
+corner_x = 10
 corner_y = 7
 objp = np.zeros((corner_x*corner_y,3), np.float32)
 objp[:,:2] = np.mgrid[0:corner_x, 0:corner_y].T.reshape(-1,2)
@@ -67,35 +67,34 @@ Write your code here
 """
 
 def compute_homography(objpoints, imgpoints):
-    # 計算單應性矩陣
-    H_init, _ = cv2.findHomography(objpoints, imgpoints)
-    # objpoints 是 3D 空間中的點，imgpoints 是影像中的 2D 點
+    # Compute homography matrix
+    # objpoints are points in 3D space, imgpoints are 2D points in the image
     A = []
 
-    # 將物體點和影像點轉換為 2D
+    # Convert object points and image points to 2D
     for i in range(len(objpoints)):
         X, Y = objpoints[i][0], objpoints[i][1]
         u, v = imgpoints[i][0][0], imgpoints[i][0][1]
         
-        # 兩個對應點生成兩個方程
+        # Two corresponding points generate two equations
         A.append([-X, -Y, -1, 0, 0, 0, u*X, u*Y, u])
         A.append([0, 0, 0, -X, -Y, -1, v*X, v*Y, v])
     
-    # 將 A 轉換為矩陣
+    # Convert A to matrix
     A = np.array(A)
     
-    # 使用 SVD 來求解 A * h = 0
+    # Use SVD to solve for A * h = 0
     U, S, Vh = np.linalg.svd(A)
     
-    # Vh 的最後一行是對應最小奇異值的解，即我們要求的 h
+    # The last row of Vh is the solution corresponding to the smallest singular value, which is the h we require
     H = Vh[-1].reshape(3, 3)
     
-    # 將 H 標準化，使 H[2,2] = 1
+    # Normalize H so that H[2,2] = 1
     H = H / H[-1, -1]
     return H
 
 def vij(H, i, j):
-    # 計算 Vij，用於內參數計算
+    # Calculate Vij for intrinsics parameter calculations
     return np.array([
         H[0, i] * H[0, j],
         H[0, i] * H[1, j] + H[1, i] * H[0, j],
@@ -105,9 +104,8 @@ def vij(H, i, j):
         H[2, i] * H[2, j]
     ])
 
-# 計算內參數矩陣 K
+# Calculate the intrinsics matrix K
 def compute_intrinsics(H_list):
-    # 使用 Hi 計算矩陣 B，並使用 Cholesky 分解求解內參數矩陣 K
     V = []
     for H in H_list:
         V.append(vij(H, 0, 1))
@@ -122,6 +120,21 @@ def compute_intrinsics(H_list):
                   [b[1], b[2], b[4]],
                   [b[3], b[4], b[5]]])
 
+    """
+    method 1: Cholesky decomposition
+    """
+    # try:
+    #     L = np.linalg.cholesky(B)
+    # except np. linalg.LinAlgError as e:
+    #     print('B is not positive definite. \n'
+    #     'Try -B.')
+    #     L = np. linalg.cholesky(-B)
+    
+    # K = L[2, 2] * np.linalg.inv(L).T
+
+    """
+    method 2: Intrisic Parameters
+    """
     cy = (B12 * B13 - B11 * B23) / (B11 * B22 - B12**2)
     lamda = B33 - (B13**2 + cy*(B12*B13 - B11*B23)) / B11
     fx = np.sqrt(lamda / B11)
@@ -129,10 +142,11 @@ def compute_intrinsics(H_list):
     gamma = -B12 * fx**2 * fy / lamda
     cx = (gamma * cy / fy) - (B13 * fx**2 / lamda)
     
-    # 組合內參數矩陣 K
+    # Combined intrinsic matrix K
     K = np.array([[fx, gamma, cx],
                   [0,  fy,    cy],
                   [0,  0,     1]])
+    
     return K
 
 
@@ -154,7 +168,9 @@ def compute_extrinsics(K, H):
     rvecs.append(r)
     tvecs.append(t)
 
-# 主函數部分：逐步調用上述函數來完成相機校正
+"""
+Main function part: Call the above functions step by step to complete camera correction
+"""
 H_matrices = [compute_homography(objp, imgp) for objp, imgp in zip(objpoints, imgpoints)]
 K = compute_intrinsics(H_matrices)
 
