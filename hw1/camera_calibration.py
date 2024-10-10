@@ -9,7 +9,7 @@ from PIL import Image
 # (8,6) is for the given testing images.
 # If you use the another data (e.g. pictures you take by your smartphone), 
 # you need to set the corresponding numbers.
-corner_x = 10
+corner_x = 7
 corner_y = 7
 objp = np.zeros((corner_x*corner_y,3), np.float32)
 objp[:,:2] = np.mgrid[0:corner_x, 0:corner_y].T.reshape(-1,2)
