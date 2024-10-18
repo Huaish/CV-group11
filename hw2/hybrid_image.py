@@ -3,10 +3,6 @@ import math
 import cv2
 import matplotlib.pyplot as plt
 from numpy.fft import fft2, ifft2, fftshift, ifftshift
-im1 = cv2.imread('data/task1and2_hybrid_pyramid/4_einstein.bmp', cv2.IMREAD_UNCHANGED)
-im2 = cv2.imread('data/task1and2_hybrid_pyramid/4_marilyn.bmp', cv2.IMREAD_UNCHANGED)
-print(im1.shape)  # im is a numpy array
-print(im2.shape)
 
 def check_img(image):
     # Check the number of channels
@@ -40,7 +36,7 @@ def IdealFilter(n_row, n_col, cutoff_freq, highPass=True):
     center_y = int(n_col/2) + 1 if n_col % 2 == 1 else int(n_col/2)
     return np.array([[ideal(i, j, center_x, center_y, highPass, cutoff_freq) for j in range(n_col)] for i in range(n_row)])
 
-def filter(image, sigma, isHigh):
+def filter_G(image, sigma, isHigh):
     shiftedDFT = fftshift(fft2(image))
     filteredDFT = shiftedDFT * \
         GaussianFilter(
@@ -48,7 +44,7 @@ def filter(image, sigma, isHigh):
     res = ifft2(ifftshift(filteredDFT))
     return np.real(res)
 
-def filter2(image, cuttoff_freq, isHigh):
+def filter_I(image, cuttoff_freq, isHigh):
     shiftedDFT = fftshift(fft2(image))
     filteredDFT = shiftedDFT * \
         IdealFilter(
@@ -56,33 +52,38 @@ def filter2(image, cuttoff_freq, isHigh):
     res = ifft2(ifftshift(filteredDFT))
     return np.real(res)
 
-def hybrid_img(high_img, low_img, sigma_h, sigma_l):
-    res = filter(high_img, sigma_h, isHigh=True) + \
-        filter(low_img, sigma_l, isHigh=False)
+def hybrid_img_G(high_img, low_img, sigma_h, sigma_l):
+    res = filter_G(high_img, sigma_h, isHigh=True) + \
+        filter_G(low_img, sigma_l, isHigh=False)
     return res
 
-def hybrid_img2(high_img, low_img, cut_h, cut_l):
-    res = filter2(high_img, cut_h, isHigh=True) + \
-        filter2(low_img, cut_l, isHigh=False)
+def hybrid_img_I(high_img, low_img, cut_h, cut_l):
+    res = filter_I(high_img, cut_h, isHigh=True) + \
+        filter_I(low_img, cut_l, isHigh=False)
     return res
 
-def show_img(img):
-    image_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    plt.imshow(image_rgb)
-    plt.show()
+def read_data(fullname):
+    return cv2.imread(f'data/task1and2_hybrid_pyramid/{fullname}', cv2.IMREAD_UNCHANGED)
 
+def read_my_data(fullname):
+    return cv2.imread(f'my_data/{fullname}', cv2.IMREAD_UNCHANGED)
+
+def output(img, name):
+    cv2.imwrite(f"output/{name}.jpg", img)
+
+im1 = read_data('0_Afghan_girl_after.jpg')
+im2 = read_data('0_Afghan_girl_before.jpg')
+
+if im1.shape != im2.shape:
+    resize(im2, (im1.shape[0], im1.shape[1]))
 
 im1_c = check_img(im1)
 im2_c = check_img(im2)
-'''
-print(im1_c.shape)
-print(im2_c.shape)
 
-show_img(im1_c)
-show_img(im2_c)
-'''
-#combine_im = hybrid_img(im1_c , im2_c , 30, 30)
-combine_im = hybrid_img2(im1_c , im2_c , 30, 30)
+#combine_im = hybrid_img_G(im1_c , im2_c , 30, 30)
+combine_im = hybrid_img_I(im1_c , im2_c , 30, 30)
 
 plt.imshow(combine_im, cmap='gray')
 plt.show()
+
+output(combine_im, "0_Ideal")
