@@ -71,11 +71,11 @@ def read_my_data(fullname):
 def output(img, name):
     cv2.imwrite(f"output/{name}.jpg", img)
 
-im1 = read_data('0_Afghan_girl_after.jpg')
-im2 = read_data('0_Afghan_girl_before.jpg')
+im1 = read_data('6_makeup_after.jpg')
+im2 = read_data('6_makeup_before.jpg')
 
 if im1.shape != im2.shape:
-    resize(im2, (im1.shape[0], im1.shape[1]))
+    im2 = cv2.resize(im2, (im1.shape[1], im1.shape[0]))
 
 im1_c = check_img(im1)
 im2_c = check_img(im2)
@@ -86,4 +86,4 @@ combine_im = hybrid_img_I(im1_c , im2_c , 30, 30)
 plt.imshow(combine_im, cmap='gray')
 plt.show()
 
-output(combine_im, "0_Ideal")
+output(combine_im, "6_Ideal")
