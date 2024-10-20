@@ -45,7 +45,7 @@ def gaussian_filter(image, cutoff_frequency, low_pass=True):
     dft_shift *= mask
     dft_shift = np.fft.ifftshift(dft_shift)
     gaussian_filtered = np.fft.ifft2(dft_shift)
-    gaussian_filtered = np.uint8(gaussian_filtered)
+    gaussian_filtered = np.real(gaussian_filtered).astype(np.uint8)
     
     return gaussian_filtered
 

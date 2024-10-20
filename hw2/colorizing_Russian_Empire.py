@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 from filter import gaussian_filter
 import time
+import os
 from utils import save_image_grid
 
 def edge_detection(image):
@@ -134,10 +135,9 @@ def gaussian_pyramid_align(image, channel, level=10, scaling_factor=0.75, max_of
 
 if __name__ == "__main__":
     # Read image
-    image_dir = 'data/task3_colorizing/'
-    image_name = "emir"
-    image_suffix = ".tif"
-    image = cv2.imread(image_dir+image_name+image_suffix, cv2.IMREAD_GRAYSCALE)    
+    image_path = 'my_data/01725u.jpg'
+    image_name = os.path.splitext(os.path.basename(image_path))[0]
+    image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)    
     img_list, text_list = [], []
     
     # Split the image into three channels
@@ -149,7 +149,7 @@ if __name__ == "__main__":
     color_img = direct_add(image)
     end_time = time.time()
     print('Direct Add time:', end_time - start_time)
-    cv2.imwrite(f'output/colorized_{image_name}_add.jpg', color_img)
+    cv2.imwrite(f'output/task3_{image_name}_add.jpg', color_img)
     img_list.append(color_img)
     text_list.append(f'Direct Add time: {end_time - start_time:.2f}s')
     
@@ -158,7 +158,7 @@ if __name__ == "__main__":
     color_img = mse_align(channel, ref_channel="blue")
     end_time = time.time()
     print('MSE alignment time:', end_time - start_time)
-    cv2.imwrite(f'output/colorized_{image_name}_mse.jpg', color_img)
+    cv2.imwrite(f'output/task3_{image_name}_mse.jpg', color_img)
     img_list.append(color_img)
     text_list.append(f'MSE alignment time: {end_time - start_time:.2f}s')
     
@@ -167,16 +167,16 @@ if __name__ == "__main__":
     color_img = canny_edge_align(channel, ref_channel="blue")
     end_time = time.time()
     print('Edge alignment time:', end_time - start_time)
-    cv2.imwrite(f'output/colorized_{image_name}_edge.jpg', color_img)
+    cv2.imwrite(f'output/task3_{image_name}_edge.jpg', color_img)
     img_list.append(color_img)
     text_list.append(f'Edge alignment time: {end_time - start_time:.2f}s')
     
-    # Pyramid alignment (Best)
+    # Pyramid alignment (Our method)
     start_time = time.time()
     color_img = gaussian_pyramid_align(image, channel, level=10, scaling_factor=0.75, max_offset=20, ref_channel="blue")
     end_time = time.time()
     print('Pyramid alignment time:', end_time - start_time)
-    cv2.imwrite(f'output/colorized_{image_name}_pyramid.jpg', color_img)
+    cv2.imwrite(f'output/task3_{image_name}_pyramid.jpg', color_img)
     img_list.append(color_img)
     text_list.append(f'Pyramid alignment time: {end_time - start_time:.2f}s')
     

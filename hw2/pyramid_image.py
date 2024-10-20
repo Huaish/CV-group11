@@ -13,7 +13,7 @@ num_levels = 4
 current_image = img
 
 for _ in range(num_levels):
-    smoothed = gaussian_filter(current_image, cutoff_frequency=20, low_pass=False)
+    smoothed = gaussian_filter(current_image, cutoff_frequency=20)
     downscaled = smoothed[::2, ::2]
     if downscaled.shape[0] < 2 or downscaled.shape[1] < 2:
         break
