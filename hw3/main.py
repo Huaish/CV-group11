@@ -4,6 +4,7 @@ import numpy as np
 import random
 import argparse
 import os
+from tqdm import tqdm
 
 
 def parse_args():
@@ -13,6 +14,14 @@ def parse_args():
     parser.add_argument("--output", type=str, default="output")
     parser.add_argument("--visualize", "-v", action="store_true")
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--detector", "-d", type=str, default="sift", choices=["sift", "mser"]
+    )
+    parser.add_argument(
+        "--matcher", "-m", type=str, default="BF", choices=["BF", "FLANN"]
+    )
+    parser.add_argument("--match-threshold", "-mt", type=float, default=0.5)
+    parser.add_argument("--ransac-threshold", "-rt", type=float, default=0.5)
     args = parser.parse_args()
 
     # set random seed
@@ -30,28 +39,47 @@ def read_image(path):
 
 
 #  ================== 1. Interest points detection & feature description by SIFT  ==================
-def sift_point(img):
-    sift = cv2.SIFT_create()
-    kp, des = sift.detectAndCompute(img, None)
+def sift(img, method="sift"):
+    if method == "sift":
+        sift = cv2.SIFT_create()
+        kp, des = sift.detectAndCompute(img, None)
+
+    elif method == "mser":
+        mser = cv2.MSER_create(
+            delta=5, min_area=10, max_area=200, max_variation=0.5, min_diversity=0.1
+        )
+        regions, _ = mser.detectRegions(img)
+        kp = [
+            cv2.KeyPoint(float(x), float(y), 5)
+            for region in regions
+            for (x, y) in region
+        ]
+        sift = cv2.SIFT_create()
+        kp, des = sift.compute(img, kp)
+
+    else:
+        raise ValueError("Invalid method for SIFT")
+
+    print(f"Detected {len(kp)} keypoints")
     return kp, des
 
 
 def show_keypoints(img_gray, img_rgb, kp, output_path=None):
-    img_kp = cv2.drawKeypoints(
-        img_gray, kp, img_rgb.copy(), flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS
-    )
+    img_kp = cv2.drawKeypoints(img_gray, kp, img_rgb.copy())
     if output_path:
         cv2.imwrite(output_path, cv2.cvtColor(img_kp, cv2.COLOR_RGB2BGR))
         print(f"Keypoints image saved to {output_path}")
-
     return img_kp
 
 
 #  ================== 2. Feature matching by SIFT features  ==================
-def matcher_with_cv(kp1, kp2, des1, des2, threshold=0.5):
+def matcher_FLANN(kp1, kp2, des1, des2, threshold=0.5):
+    FLANN_INDEX_KDTREE = 1
+    index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
+    search_params = dict(checks=50)
 
-    bf = cv2.BFMatcher()
-    matches = bf.knnMatch(des1, des2, k=2)
+    flann = cv2.FlannBasedMatcher(index_params, search_params)
+    matches = flann.knnMatch(des1, des2, k=2)
 
     good = []
     for m, n in matches:
@@ -63,33 +91,33 @@ def matcher_with_cv(kp1, kp2, des1, des2, threshold=0.5):
         matches.append(list(kp1[pair[0].queryIdx].pt + kp2[pair[0].trainIdx].pt))
 
     matches = np.array(matches)
+    print(f"Found {len(matches)} matches")
     return matches
 
 
-def matcher(kp1, kp2, des1, des2, threshold=0.5):
+def matcher(kp1, kp2, des1, des2, threshold=0.5, method="BF"):
     good_matches = []
 
-    # Loop through each descriptor in des1
-    for i, d1 in enumerate(des1):
-        # Compute the Euclidean distance to all descriptors in des2
-        distances = np.linalg.norm(des2 - d1, axis=1)
+    if method == "FLANN":
+        return matcher_FLANN(kp1, kp2, des1, des2, threshold)
 
-        # Find the two closest matches
-        sorted_indices = np.argsort(distances)
-        best_match_idx = sorted_indices[0]
-        second_best_match_idx = sorted_indices[1]
+    elif method == "BF":
+        for i, d1 in enumerate(tqdm(des1, desc="Matching features with BF")):
+            # Compute the Euclidean distance to all descriptors in des2
+            distances = np.linalg.norm(des2 - d1, axis=1)
 
-        # Apply the ratio test
-        if distances[best_match_idx] < threshold * distances[second_best_match_idx]:
-            # Save the keypoints that passed the ratio test
-            good_matches.append(list(kp1[i].pt + kp2[best_match_idx].pt))
+            # Find the two closest matches
+            sorted_indices = np.argsort(distances)
+            best_match_idx = sorted_indices[0]
+            second_best_match_idx = sorted_indices[1]
+
+            # Ratio test
+            if distances[best_match_idx] < threshold * distances[second_best_match_idx]:
+                good_matches.append(list(kp1[i].pt + kp2[best_match_idx].pt))
 
     # Convert matches to a numpy array for consistency
     matches = np.array(good_matches)
     return matches
-
-
-# TODO: use different matcher and feature: ratio test, cross-checking, RANSAC, MSER, etc.
 
 
 def show_matches(img_combined, matches, output_path=None):
@@ -104,7 +132,7 @@ def show_matches(img_combined, matches, output_path=None):
     colormap = plt.get_cmap("viridis")
 
     for i in range(matches.shape[0]):
-        color = colormap(i)  # Color from the colormap based on index
+        color = colormap(i / matches.shape[0], alpha=0.8)
 
         # Plot keypoints on both images with the gradient color
         ax.plot(matches[i, 0], matches[i, 1], "o", color=color, markersize=1)
@@ -147,7 +175,7 @@ def ransac_homography(matches, iterations=1000, threshold=0.5):
     max_inliers = 0
     best_H = None
 
-    for _ in range(iterations):
+    for _ in tqdm(range(iterations), desc="RANSAC iterations"):
         # random sample 4 pairs of points
         idx = np.random.choice(len(points_in_img1), 4, replace=False)
         sample_points1 = points_in_img1[idx]
@@ -189,7 +217,7 @@ def warp_perspective(image, H, size, offset=(0, 0)):
     offset_x, offset_y = offset
     warped_image = np.zeros((h, w, 3), dtype=np.uint8)
 
-    for y in range(h):
+    for y in tqdm(range(h), desc="Warping image"):
         for x in range(w):
             # Map (x,y) in the stitched image back to the original image
             src_point = np.linalg.inv(H) @ np.array([x - offset_x, y - offset_y, 1])
@@ -209,7 +237,7 @@ def warp(left, right, H):
     hr, wr = right.shape[:2]
 
     # Get the corners of the right image and transform them using H
-    corners = np.array([[0, 0], [0, hr - 1], [wr - 1, hr - 1], [wr - 1, 0]])
+    corners = np.array([[0, 0], [0, hl - 1], [wl - 1, hl - 1], [wl - 1, 0]])
     homo_corners = np.hstack([corners, np.ones((corners.shape[0], 1))])
 
     # perspective transform
@@ -219,8 +247,8 @@ def warp(left, right, H):
     # Calculate the size of the stitched image
     min_x = min(np.min(transformed_corners[0]), 0)
     min_y = min(np.min(transformed_corners[1]), 0)
-    max_x = max(np.max(transformed_corners[0]), wl)
-    max_y = max(np.max(transformed_corners[1]), hl)
+    max_x = max(np.max(transformed_corners[0]), wr)
+    max_y = max(np.max(transformed_corners[1]), hr)
 
     # Calculate the translation matrix
     T = np.array([[1, 0, -min_x], [0, 1, -min_y], [0, 0, 1]])
@@ -257,40 +285,45 @@ def stitch_image(left, right, H, blend=False):
 
 
 if __name__ == "__main__":
-    params = parse_args()
-    outdir = params.output
+    args = parse_args()
+    outdir = args.output
     plt.rcParams["figure.figsize"] = [5, 5]
 
+    os.makedirs(outdir, exist_ok=True)
+
     # Read images
-    right_origin, right_rgb, right_gray = read_image(params.right_img)
-    left_origin, left_rgb, left_gray = read_image(params.left_img)
+    right_origin, right_rgb, right_gray = read_image(args.right_img)
+    left_origin, left_rgb, left_gray = read_image(args.left_img)
 
     # 1. Detect interest points and extract features
-    kp_left, des_left = sift_point(left_gray)
-    kp_right, des_right = sift_point(right_gray)
+    kp_left, des_left = sift(left_gray, method=args.detector)
+    kp_right, des_right = sift(right_gray, method=args.detector)
 
     # 2. Match features
-    matches = matcher(kp_left, kp_right, des_left, des_right, 0.5)
+    matches = matcher(
+        kp_left, kp_right, des_left, des_right, args.match_threshold, args.matcher
+    )
 
     # 3. RANSAC to find homography matrix H
-    inliers, H = ransac_homography(matches, threshold=0.3, iterations=2000)
+    inliers, H = ransac_homography(matches, threshold=args.ransac_threshold)
 
     # 4. Warp image to create panoramic image
     panoramic = stitch_image(left_origin, right_origin, H, blend=True)
 
     # Save the panoramic image
-    left_image_name = os.path.basename(params.left_img).split(".")[0]
-    right_image_name = os.path.basename(params.right_img).split(".")[0]
+    left_image_name = os.path.basename(args.left_img).split(".")[0]
+    right_image_name = os.path.basename(args.right_img).split(".")[0]
     out_path = os.path.join(outdir, f"{left_image_name}_{right_image_name}_pano.jpg")
     cv2.imwrite(out_path, panoramic)
     print(f"Panoramic image saved to {out_path}")
 
     # Visualizations
-    if params.visualize:
+    if args.visualize:
         right_kp_img = show_keypoints(right_gray, right_rgb, kp_right)
         left_kp_img = show_keypoints(left_gray, left_rgb, kp_left)
 
         img_concat = np.concatenate((left_kp_img, right_kp_img), axis=1)
         cv2.imwrite(os.path.join(outdir, "keypoints.jpg"), img_concat)
+        img_concat = np.concatenate((left_gray, right_gray), axis=1)
         show_matches(img_concat, matches, os.path.join(outdir, "matches.jpg"))
         show_matches(img_concat, matches[inliers], os.path.join(outdir, "inliers.jpg"))
