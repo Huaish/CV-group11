@@ -143,20 +143,36 @@ def warp(left_img, right_img, H):
 def feature_detection(img1, img2):
     # Initialize SIFT detector
     sift = cv2.SIFT_create()
+    
+    mser = cv2.MSER_create()
+    regions1, _ = mser.detectRegions(img1)
+    regions2, _ = mser.detectRegions(img2)
+    
+    print("Number of region1 in image 1:", len(regions1))
 
+    keypoints1 = [cv2.KeyPoint(float(x), float(y), 1) for p in regions1 for (x, y) in p] 
+    keypoints2 = [cv2.KeyPoint(float(x), float(y), 1) for p in regions2 for (x, y) in p] 
+    
+    # keypoints1, descriptors1 = sift.compute(img1, keypoints1)
+    # keypoints2, descriptors2 = sift.compute(img2, keypoints2)
+    
+    
     # Detect keypoints and compute descriptors
     keypoints1, descriptors1 = sift.detectAndCompute(img1, None)
     keypoints2, descriptors2 = sift.detectAndCompute(img2, None)
+    
+    print("Number of keypoints in image 1:", len(keypoints1))
+
 
     # Draw keypoints on the images
     img1_keypoints = cv2.drawKeypoints(img1, keypoints1, None, flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
     img2_keypoints = cv2.drawKeypoints(img2, keypoints2, None, flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
 
-    # show_keypoints(img1_keypoints, img2_keypoints)
+    show_keypoints(img1_keypoints, img2_keypoints)
     return keypoints1, descriptors1, keypoints2, descriptors2
     
 # Feature matching by SIFT features
-def feature_matching(descriptors1, descriptors2, ratio_threshold=0.5):
+def feature_matching(img1, img2, descriptors1, descriptors2, ratio_threshold=0.5):
     # Assuming descriptors1 and descriptors2 are numpy arrays from your SIFT feature detection
     matches = []
 
@@ -178,7 +194,7 @@ def feature_matching(descriptors1, descriptors2, ratio_threshold=0.5):
             # Store the match with the index of descriptor1 and descriptor2
             matches.append((i, sorted_indices[0]))  # (index in descriptors1, index in descriptors2)
 
-    # show_matches(img1, img2, keypoints1, keypoints2, matches)
+    show_matches(img1, img2, keypoints1, keypoints2, matches)
     return matches
     
 def read_images(left_image_path, right_image_path, gray=True):
@@ -201,8 +217,17 @@ if __name__ == '__main__':
     
     img_l, img_r = read_images("building1.jpg", "building2.jpg")
     
+    scale_percent = 10  # 縮小比例，例如50%大小
+    width = int(img_l.shape[1] * scale_percent / 100)
+    height = int(img_l.shape[0] * scale_percent / 100)
+    dim = (width, height)
+    print("dimension", dim)
+    
+    img_l = cv2.resize(img_l, dim, interpolation=cv2.INTER_AREA)
+    img_r = cv2.resize(img_r, dim, interpolation=cv2.INTER_AREA)
+    
     keypoints1, descriptors1, keypoints2, descriptors2 = feature_detection(img_l, img_r)
-    matches = feature_matching(descriptors1, descriptors2)
+    matches = feature_matching(img_l, img_r, descriptors1, descriptors2)
     best_H, inliers = ransac_homography(matches, keypoints1, keypoints2)
     
     # Extract the inlier matches
@@ -215,9 +240,12 @@ if __name__ == '__main__':
     img_matches = cv2.drawMatches(img_l, keypoints1, img_r, keypoints2, inlier_matches_for_display, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
 
     img_l, img_r = read_images("building1.jpg", "building2.jpg", gray=False)
+    
+    img_l = cv2.resize(img_l, dim, interpolation=cv2.INTER_AREA)
+    img_r = cv2.resize(img_r, dim, interpolation=cv2.INTER_AREA)
 
     # Warp image 2 onto image 1
     panorama = warp(img_l, img_r, best_H)
     
-    cv2.imwrite('panorama_building.jpg', panorama)
+    cv2.imwrite('output/panorama_building.jpg', panorama)
     
