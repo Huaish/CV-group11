@@ -15,7 +15,11 @@ def parse_args():
     parser.add_argument("--visualize", "-v", action="store_true")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument(
-        "--detector", "-d", type=str, default="sift", choices=["sift", "mser"]
+        "--detector",
+        "-d",
+        type=str,
+        default="sift",
+        choices=["sift", "mser", "harris"],
     )
     parser.add_argument(
         "--matcher", "-m", type=str, default="BF", choices=["BF", "FLANN"]
@@ -31,15 +35,23 @@ def parse_args():
     return args
 
 
-def read_image(path):
+def read_image(path, resize=False):
     img = cv2.imread(path)
+    if resize:
+        scale_percent = 10
+        width = int(img.shape[1] * scale_percent / 100)
+        height = int(img.shape[0] * scale_percent / 100)
+        dim = (width, height)
+
+        img = cv2.resize(img, dim, interpolation=cv2.INTER_AREA)
+
     img_gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     return img, img_rgb, img_gray
 
 
 #  ================== 1. Interest points detection & feature description by SIFT  ==================
-def sift(img, method="sift"):
+def sift(img, method="sift", threshold=0.01):
     if method == "sift":
         sift = cv2.SIFT_create()
         kp, des = sift.detectAndCompute(img, None)
@@ -57,10 +69,22 @@ def sift(img, method="sift"):
         sift = cv2.SIFT_create()
         kp, des = sift.compute(img, kp)
 
+    elif method == "harris":
+        dst = cv2.cornerHarris(img, 2, 3, 0.04)
+        kp = [
+            cv2.KeyPoint(x, y, 5)
+            for y in range(dst.shape[0])
+            for x in range(dst.shape[1])
+            if dst[y, x] > threshold * dst.max()
+        ]
+
+        sift = cv2.SIFT_create()
+        kp, des = sift.compute(img, kp)
+
     else:
         raise ValueError("Invalid method for SIFT")
 
-    print(f"Detected {len(kp)} keypoints")
+    print(f"Detected {len(kp)} keypoints using {method}")
     return kp, des
 
 
@@ -292,8 +316,14 @@ if __name__ == "__main__":
     os.makedirs(outdir, exist_ok=True)
 
     # Read images
-    right_origin, right_rgb, right_gray = read_image(args.right_img)
-    left_origin, left_rgb, left_gray = read_image(args.left_img)
+    right_origin, right_rgb, right_gray = read_image(
+        args.right_img,
+        resize=False if os.path.dirname(args.right_img) == "data" else True,
+    )
+    left_origin, left_rgb, left_gray = read_image(
+        args.left_img,
+        resize=False if os.path.dirname(args.left_img) == "data" else True,
+    )
 
     # 1. Detect interest points and extract features
     kp_left, des_left = sift(left_gray, method=args.detector)
