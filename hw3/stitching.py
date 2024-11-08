@@ -6,7 +6,6 @@ from numpy.linalg import svd
 import os
 
 def show_keypoints(keypoints1, keypoints2):
-    # Display the images with keypoints
     plt.figure(figsize=(10, 5))
     plt.subplot(1, 2, 1)
     plt.title("Keypoints in Image 1")
@@ -17,7 +16,6 @@ def show_keypoints(keypoints1, keypoints2):
     plt.show()
 
 def show_matches(img1, img2, keypoints1, keypoints2, matches):
-    # Visualize the good matches
     matched_img = cv2.drawMatches(img1, keypoints1, img2, keypoints2, 
                                   [cv2.DMatch(_queryIdx=m[0], _trainIdx=m[1], _imgIdx=0, _distance=0) for m in matches], 
                                   None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
@@ -27,6 +25,7 @@ def show_matches(img1, img2, keypoints1, keypoints2, matches):
     plt.imshow(matched_img)
     plt.show()
     
+# calculate homography matrix H
 def compute_homography(pts1, pts2):
     # Construct matrix A for homography
     A = []
@@ -42,6 +41,7 @@ def compute_homography(pts1, pts2):
     H = V[-1].reshape(3, 3)
     return H / H[2, 2]  # Normalize so that H[2,2] = 1
 
+# RANSAC to find homography matrix H
 def ransac_homography(matches, keypoints1, keypoints2, threshold=0.5, max_iterations=2000):
     best_H = None
     max_inliers = 0
@@ -101,8 +101,8 @@ def warp_perspective(image, H, size, offset=(0, 0)):
                 warped_image[y, x] = image[int(src_point[1]), int(src_point[0])]
     return warped_image
 
+# Warp image to create panoramic image
 def warp(left_img, right_img, H):  
-    # 獲取圖像尺寸
     h_left, w_left = left_img.shape[:2]
     h_right, w_right = right_img.shape[:2]
     
@@ -114,12 +114,10 @@ def warp(left_img, right_img, H):
     pts_left_transformed = H @ pts_left_h.transpose()
     pts_left_transformed = pts_left_transformed[:2] / pts_left_transformed[2]
     
-    # 計算變換後的邊界
     pts = np.concatenate((pts_left_transformed, pts_right), axis=1)
     [xmin, ymin] = np.int32(pts.min(axis=1))
     [xmax, ymax] = np.int32(pts.max(axis=1))
    
-    # 建立平移矩陣
     translation_dist = [-xmin, -ymin]
     translation_matrix = np.array([
         [1, 0, translation_dist[0]],
@@ -127,13 +125,10 @@ def warp(left_img, right_img, H):
         [0, 0, 1]
     ], dtype=np.float32)
     
-    # 組合變換矩陣
     H_translation = translation_matrix.dot(H)
     
-    # 計算輸出圖像大小
     size = (xmax - xmin, ymax - ymin)
     
-    # 分別對兩張圖片進行變換
     warped_left = warp_perspective(left_img, H_translation, size)
     warped_right = warp_perspective(right_img, translation_matrix, size)
     
@@ -144,6 +139,7 @@ def warp(left_img, right_img, H):
     
     return result
 
+# Interest points detection & feature description by SIFT
 def feature_detection(img1, img2):
     # Initialize SIFT detector
     sift = cv2.SIFT_create()
@@ -156,9 +152,10 @@ def feature_detection(img1, img2):
     img1_keypoints = cv2.drawKeypoints(img1, keypoints1, None, flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
     img2_keypoints = cv2.drawKeypoints(img2, keypoints2, None, flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
 
-    return keypoints1, descriptors1, keypoints2, descriptors2
     # show_keypoints(img1_keypoints, img2_keypoints)
+    return keypoints1, descriptors1, keypoints2, descriptors2
     
+# Feature matching by SIFT features
 def feature_matching(descriptors1, descriptors2, ratio_threshold=0.5):
     # Assuming descriptors1 and descriptors2 are numpy arrays from your SIFT feature detection
     matches = []
@@ -173,8 +170,8 @@ def feature_matching(descriptors1, descriptors2, ratio_threshold=0.5):
         # Sort distances and get the two smallest distances
         distances = np.array(distances)
         sorted_indices = distances.argsort()
-        closest_distance = distances[sorted_indices[0]] # ||f1 - f2||，最近的距離
-        second_closest_distance = distances[sorted_indices[1]] # ||f1 - f2'||，次近鄰距離
+        closest_distance = distances[sorted_indices[0]] # ||f1 - f2||
+        second_closest_distance = distances[sorted_indices[1]] # ||f1 - f2'||
 
         # Apply the ratio test
         if closest_distance < ratio_threshold * second_closest_distance:
@@ -185,7 +182,7 @@ def feature_matching(descriptors1, descriptors2, ratio_threshold=0.5):
     return matches
     
 def read_images(left_image_path, right_image_path, gray=True):
-    root_path = "data"
+    root_path = "my_data"
     if gray:
         img_l = cv2.imread(os.path.join(root_path, left_image_path), cv2.IMREAD_GRAYSCALE)
         img_r = cv2.imread(os.path.join(root_path, right_image_path), cv2.IMREAD_GRAYSCALE)
@@ -202,7 +199,7 @@ def read_images(left_image_path, right_image_path, gray=True):
 
 if __name__ == '__main__':
     
-    img_l, img_r = read_images("hill1.JPG", "hill2.JPG")
+    img_l, img_r = read_images("building1.jpg", "building2.jpg")
     
     keypoints1, descriptors1, keypoints2, descriptors2 = feature_detection(img_l, img_r)
     matches = feature_matching(descriptors1, descriptors2)
@@ -217,10 +214,10 @@ if __name__ == '__main__':
     # Draw the inlier matches
     img_matches = cv2.drawMatches(img_l, keypoints1, img_r, keypoints2, inlier_matches_for_display, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
 
-    img_l, img_r = read_images("hill1.JPG", "hill2.JPG", gray=False)
+    img_l, img_r = read_images("building1.jpg", "building2.jpg", gray=False)
 
     # Warp image 2 onto image 1
     panorama = warp(img_l, img_r, best_H)
     
-    cv2.imwrite('panorama.jpg', panorama)
+    cv2.imwrite('panorama_building.jpg', panorama)
     
