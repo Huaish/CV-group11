@@ -65,7 +65,6 @@ def normalize_points(points):
     T = np.array(
         [[scale, 0, -scale * mean[0]], [0, scale, -scale * mean[1]], [0, 0, 1]]
     )
-    # T = np.array([[scale, 0, scale * mean[0]], [0, scale, scale * mean[1]], [0, 0, 1]])
     points_h = np.hstack((points, np.ones((points.shape[0], 1))))
     normalized_points = (T @ points_h.T).T
 
@@ -90,7 +89,7 @@ def compute_fundamental_matrix(pts1, pts2):
 
     # Step 4: Enforce rank-2 constraint
     U, S, V = np.linalg.svd(F_normalized)
-    # S[2] = 0
+    S[2] = 0
     F_normalized = U @ np.diag(S) @ V
     F_normalized = F_normalized / F_normalized[2, 2]
 
