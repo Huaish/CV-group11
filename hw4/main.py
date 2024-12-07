@@ -23,7 +23,7 @@ def parse_args():
     parser.add_argument(
         "--calib",
         type=str,
-        default="data/Statue_calib.txt",
+        default="data/Mesona_calib.txt",
         help="Path to calibration file",
     )
     parser.add_argument(
