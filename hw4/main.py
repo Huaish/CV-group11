@@ -8,20 +8,22 @@ import matplotlib.pyplot as plt
 from scipy.spatial import Delaunay
 from PIL import Image
 import argparse
+import glob
+from camera_calibration import compute_homography, compute_intrinsics
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="3D Reconstruction")
     parser.add_argument(
-        "--img1", type=str, default="data/tissue1.jpeg", help="Path to image 1"
+        "--img1", type=str, default="my_data/case1.png", help="Path to image 1"
     )
     parser.add_argument(
-        "--img2", type=str, default="data/tissue2.jpeg", help="Path to image 2"
+        "--img2", type=str, default="my_data//case2.png", help="Path to image 2"
     )
     parser.add_argument(
         "--calib",
         type=str,
-        default="data/my_calib.txt",
+        default="my_data/calib_data",
         help="Path to calibration file",
     )
     parser.add_argument(
@@ -29,6 +31,18 @@ def parse_args():
         type=str,
         default="output",
         help="Directory to save output files",
+    )
+    parser.add_argument(
+        "--corner_x",
+        type=int,
+        default=10,
+        help="Number of corners in the x direction for camera calibration",
+    )
+    parser.add_argument(
+        "--corner_y",
+        type=int,
+        default=7,
+        help="Number of corners in the y direction for camera calibration",
     )
     return parser.parse_args()
 
@@ -239,7 +253,7 @@ def choose_best_camera_pose(R1, R2, t1, pts1, pts2, K1, K2):
     correct_P1, correct_P2 = None, None
 
     for i, (R, t) in enumerate(poses):
-        print(f"Pose {i + 1}")
+        # print(f"Pose {i + 1}")
 
         P1 = K1 @ np.hstack((np.eye(3), np.zeros((3, 1))))
         P2 = K2 @ np.hstack((R, t.reshape(-1, 1)))
@@ -251,14 +265,14 @@ def choose_best_camera_pose(R1, R2, t1, pts1, pts2, K1, K2):
         in_front_count = count_in_front_of_both_cameras(
             pts_3d, np.eye(3), np.zeros(3), R, t
         )
-        print(f"Points in front: {in_front_count}")
+        # print(f"Points in front: {in_front_count}")
 
         if in_front_count > max_in_front:
             max_in_front = in_front_count
             correct_idx = i
             correct_pose = (R, t)
             correct_P1, correct_P2 = P1, P2
-    print(f"Best pose: Pose {correct_idx + 1}")
+    # print(f"Best pose: Pose {correct_idx + 1}")
     return (correct_pose, correct_P1, correct_P2, correct_idx)
 
 
@@ -303,8 +317,8 @@ def generate_obj_file(P, p_img2, M, tex_name, im_index, output_dir):
     # ----------------------------------------------------
     # Output .obj file
     # ----------------------------------------------------
-    obj_filename = os.path.join(output_dir, f"model{im_index}.obj")
-    mtl_filename = os.path.join(output_dir, f"model{im_index}.mtl")
+    obj_filename = f"model{im_index}.obj"
+    mtl_filename = f"model{im_index}.mtl"
 
     with open(obj_filename, "w") as obj_file:
         obj_file.write("# obj file\n")
@@ -337,7 +351,7 @@ def generate_obj_file(P, p_img2, M, tex_name, im_index, output_dir):
         mtl_file.write("# MTL file\n")
         mtl_file.write("newmtl Texture\n")
         mtl_file.write("Ka 1 1 1\nKd 1 1 1\nKs 1 1 1\n")
-        mtl_file.write(f"map_Kd {tex_name.replace('data', 'texture')}\n")
+        mtl_file.write(f"map_Kd {tex_name}\n")
 
     print(f"Files saved: {obj_filename}, {mtl_filename}, and {mesh_path}")
 
@@ -359,6 +373,45 @@ def generate_mat_file(pts_3d, p_img2, M, tex_name, im_index, output_dir):
     )
 
     print("Files saved: matlab_input.mat")
+
+
+def generate_camera_calibration(data_dir, corner_x=10, corner_y=7):
+    objp = np.zeros((corner_x * corner_y, 3), np.float32)
+    objp[:, :2] = np.mgrid[0:corner_x, 0:corner_y].T.reshape(-1, 2)
+
+    # Arrays to store object points and image points from all the images.
+    objpoints = []  # 3d points in real world space
+    imgpoints = []  # 2d points in image plane.
+
+    # Make a list of calibration images
+    images = glob.glob(os.path.join(data_dir, "*"))
+
+    # Step through the list and search for chessboard corners
+    print("Start finding chessboard corners...")
+    for idx, fname in enumerate(images):
+        img = cv2.imread(fname)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        plt.imshow(gray)
+
+        # Find the chessboard corners
+        print("find the chessboard corners of", fname)
+        ret, corners = cv2.findChessboardCorners(gray, (corner_x, corner_y), None)
+
+        # If found, add object points, image points
+        if ret == True:
+            objpoints.append(objp)
+            imgpoints.append(corners)
+
+            # Draw and display the corners
+            cv2.drawChessboardCorners(img, (corner_x, corner_y), corners, ret)
+            plt.imshow(img)
+    H_matrices = [
+        compute_homography(objp, imgp) for objp, imgp in zip(objpoints, imgpoints)
+    ]
+    K = compute_intrinsics(H_matrices)
+    print("Camera calibration...")
+    print("K:\n", K)
+    return K
 
 
 # ================== Plotting functions ==================
@@ -488,8 +541,12 @@ if __name__ == "__main__":
     )
 
     # Intrinsic matrix K
-    K1 = np.loadtxt(args.calib, skiprows=3, max_rows=3)
-    K2 = np.loadtxt(args.calib, skiprows=9, max_rows=3)
+    if args.calib.endswith(".txt") and os.path.exists(args.calib):
+        K1 = np.loadtxt(args.calib, skiprows=3, max_rows=3)
+        K2 = np.loadtxt(args.calib, skiprows=9, max_rows=3)
+    else:
+        K1 = generate_camera_calibration(args.calib, args.corner_x, args.corner_y)
+        K2 = K1
 
     # Compute Essential Matrix
     E = compute_essential_matrix(F, K1, K2)
@@ -548,7 +605,5 @@ if __name__ == "__main__":
         cameraConfig={"scale": 0.1, "depth": 0.1, "faceColor": "red"},
     )
 
-    generate_obj_file(pts_3d, pts1, P1, args.img1, 1, "mesh")
-    generate_mat_file(pts_3d, pts2, P1, args.img1, 1, "mesh")
-
-    # plt.show()
+    generate_obj_file(pts_3d, pts1, P1, args.img1, 1, output_dir)
+    # generate_mat_file(pts_3d, pts2, P1, args.img1, 1, "mesh")
