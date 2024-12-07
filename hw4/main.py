@@ -15,15 +15,15 @@ from camera_calibration import compute_homography, compute_intrinsics
 def parse_args():
     parser = argparse.ArgumentParser(description="3D Reconstruction")
     parser.add_argument(
-        "--img1", type=str, default="my_data/case1.png", help="Path to image 1"
+        "--img1", type=str, default="data/Mesona1.JPG", help="Path to image 1"
     )
     parser.add_argument(
-        "--img2", type=str, default="my_data//case2.png", help="Path to image 2"
+        "--img2", type=str, default="data/Mesona2.JPG", help="Path to image 2"
     )
     parser.add_argument(
         "--calib",
         type=str,
-        default="my_data/calib_data",
+        default="data/Statue_calib.txt",
         help="Path to calibration file",
     )
     parser.add_argument(
