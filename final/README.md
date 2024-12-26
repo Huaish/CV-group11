@@ -1,8 +1,13 @@
-# How To Use Color Transfer Methods
+# Computer Vision Final Project: Refining Style Transfer with Color Transfer
 
-## Installation
+> Team 11
+> Member / 313551097 鄭淮薰, 313551098 張欀齡, 110705017 何翊華
 
-### Option 1: Using `venv`
+## Color Transfer
+
+### Installation
+
+#### Option 1: Using `venv`
 
 1. Create a virtual environment:
    ```bash
@@ -22,7 +27,7 @@
    pip install -r requirements.txt
    ```
 
-### Option 2: Using `conda`
+#### Option 2: Using `conda`
 
 1. Create a Conda environment:
    ```bash
@@ -37,12 +42,12 @@
    pip install -r requirements.txt
    ```
 
-## Datasets
+### Datasets
 
 The datasets required for the project are stored in the data directory.
 The directory contains two main categories: `Content` and `Style`, each containing subdirectories with image files.
 
-## Color Transfer Methods
+### Color Transfer Methods
 
 The `color_transfer.py` script includes the following methods:
 
@@ -53,7 +58,7 @@ The `color_transfer.py` script includes the following methods:
 5. **pca_transfer**: Applies Principal Component Analysis (PCA) for color alignment.
 6. **pdf_transfer**: Performs probability density function (PDF)-based color transfer.
 
-### Usage
+#### Usage
 
 To apply color transfer, use the following code snippet:
 
@@ -76,7 +81,7 @@ python color_transfer.py
 
 Select a method based on your needs for color transformation.
 
-## Demo Website
+### Demo Website
 
 Launch an interactive web interface to experiment with color transfer:
 
@@ -85,3 +90,13 @@ python demo.py
 ```
 
 Once started, the web interface can be accessed at [http://127.0.0.1:7861](http://127.0.0.1:7861)
+
+---
+
+## Acknowledgements
+
+The code is built upon the following resources:
+
+- [python-color-transfer](https://github.com/pengbo-learn/python-color-transfer.git)
+- [StyleShot](https://github.com/open-mmlab/StyleShot.git)
+- [B-LoRA](https://github.com/yardenfren1996/B-LoRA.git)
