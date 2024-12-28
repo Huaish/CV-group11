@@ -3,6 +3,9 @@
 > Team 11
 > Member / 313551097 鄭淮薰, 313551098 張欀齡, 110705017 何翊華
 
+![result1](img/results1.jpeg)
+![result2](img/results2.jpeg)
+
 ## Color Transfer
 
 ### Installation
