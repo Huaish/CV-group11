@@ -80,7 +80,7 @@ def process_images(img_in, ref_in, strength):
 def gradio_interface():
     # Define Gradio interface
     with gr.Blocks() as demo:
-        gr.Markdown("# Color Transfer and Style Transfer")
+        gr.Markdown("# Team11 - Color Transfer Demo Website")
         gr.Markdown(
             "Upload an input image and a reference image to perform color transfer using various methods. "
             "Then apply style transfer (StyleShot) using the color-transferred results."
